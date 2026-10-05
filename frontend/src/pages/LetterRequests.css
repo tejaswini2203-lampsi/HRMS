@@ -1,0 +1,141 @@
+.letter-requests-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.letters-header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.letter-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.letter-table-wrap {
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.letter-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+}
+
+.letter-table th {
+  background: #f8fafc;
+  padding: 12px 16px;
+  font-weight: 600;
+  color: #475569;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+}
+
+.letter-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.emp-title {
+  display: block;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.emp-desc {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.letter-type-pill {
+  font-weight: 500;
+  background: #f1f5f9;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.doc-download-link {
+  color: #2563eb;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.doc-download-link:hover {
+  text-decoration: underline;
+}
+
+.letter-review-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.letter-preview-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 14px;
+}
+
+.letter-preview-card h4 {
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.letter-preview-text {
+  font-family: Georgia, serif;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #1e293b;
+  background: #ffffff;
+  padding: 16px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+}
+
+.signature-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 12px;
+}
+
+.signature-section h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sig-sub {
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.sig-success-badge {
+  color: #16a34a;
+  font-size: 12px;
+  font-weight: 600;
+  background: #dcfce7;
+  padding: 6px 12px;
+  border-radius: 4px;
+  display: inline-block;
+  margin-top: 8px;
+}
+
+.modal-actions-right {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}

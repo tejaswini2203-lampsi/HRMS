@@ -1,0 +1,37 @@
+.page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  padding: 0.35rem 0 1.15rem;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-divider);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.page-header h1 {
+  font-size: clamp(1.45rem, 2.2vw, 1.85rem);
+  font-family: var(--font-display);
+  color: var(--color-text);
+  font-weight: 750;
+  letter-spacing: -0.025em;
+}
+
+.page-header__subtitle {
+  margin-top: 0.4rem;
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+  max-width: 48rem;
+  line-height: 1.5;
+}
+
+.page-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}

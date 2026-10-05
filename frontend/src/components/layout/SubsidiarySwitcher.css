@@ -1,0 +1,102 @@
+.sub-switcher {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.sub-switcher--static,
+.sub-switcher__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 38px;
+  padding: 0.28rem 0.75rem 0.28rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--color-text);
+}
+
+.sub-switcher__trigger {
+  cursor: pointer;
+  font: inherit;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.sub-switcher__trigger:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+  border-color: rgba(37, 99, 235, 0.28);
+}
+
+.sub-switcher__trigger--default {
+  border-color: rgba(31, 181, 160, 0.35);
+  background: rgba(31, 181, 160, 0.06);
+}
+
+.sub-switcher i {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--sub-badge, #0f766e);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sub-badge, #0f766e) 18%, transparent);
+}
+
+.sub-switcher span {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.15;
+}
+
+.sub-switcher strong {
+  font-size: 0.74rem;
+  font-weight: 750;
+  font-family: var(--font-display);
+}
+
+.sub-switcher small {
+  font-size: 0.64rem;
+  color: var(--color-text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sub-switcher__menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 260px;
+  margin: 0;
+  padding: 0.4rem;
+  list-style: none;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 16px;
+  box-shadow: var(--shadow-md);
+  z-index: 40;
+}
+
+.sub-switcher__menu button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  text-align: left;
+  border: none;
+  background: transparent;
+  border-radius: 12px;
+  padding: 0.6rem 0.7rem;
+  cursor: pointer;
+  font: inherit;
+}
+
+.sub-switcher__menu button:hover,
+.sub-switcher__menu button.is-active {
+  background: rgba(15, 23, 42, 0.05);
+}
+
+@media (max-width: 720px) {
+  .sub-switcher strong {
+    display: none;
+  }
+}

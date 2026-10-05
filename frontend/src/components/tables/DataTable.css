@@ -1,0 +1,360 @@
+/* Click-driven record list — replaces heavy table layouts */
+
+.click-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.click-list__sort {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.click-list__sort-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-right: 0.15rem;
+}
+
+.click-list__sort button {
+  border: 1px solid var(--color-border);
+  background: #fff;
+  color: var(--color-text-secondary);
+  border-radius: 999px;
+  padding: 0.32rem 0.72rem;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+}
+
+.click-list__sort button:hover {
+  border-color: rgba(31, 181, 160, 0.35);
+  color: var(--color-primary-deep);
+}
+
+.click-list__sort button.is-active {
+  background: linear-gradient(135deg, #2ad4bb, #1aa892);
+  border-color: transparent;
+  color: #fff;
+}
+
+.click-list__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.click-list__card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 260px) minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 0.85rem 1.35rem;
+  padding: 1rem 1.05rem;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease;
+}
+
+.click-list__card.is-clickable {
+  cursor: pointer;
+}
+
+.click-list__card.is-clickable:hover,
+.click-list__card.is-clickable:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(31, 181, 160, 0.35);
+  box-shadow: var(--shadow-md);
+  outline: none;
+}
+
+.click-list__lead {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.click-list__lead .emp-cell__name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.click-list__lead .cell-primary,
+.click-list__lead strong,
+.click-list__lead > span,
+.click-list__lead > a {
+  display: block;
+  font-size: 0.94rem;
+  font-weight: 700;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.click-list__meta-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--meta-cols, 4), minmax(0, 1fr));
+  gap: 0.55rem 1.45rem;
+  min-width: 0;
+  width: 100%;
+  align-items: start;
+}
+
+.click-list__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  min-width: 0;
+}
+
+.click-list__meta-label {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.click-list__meta-value {
+  font-size: 0.84rem;
+  color: var(--color-text-secondary);
+  line-height: 1.35;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.click-list__meta-value .emp-cell,
+.click-list__meta-value .emp-sub-badge {
+  max-width: 100%;
+}
+
+.click-list__meta-value .emp-cell__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.click-list__meta-value .form-field {
+  margin: 0;
+  min-width: 150px;
+}
+
+.click-list__meta-value .form-field__label {
+  display: none;
+}
+
+.click-list__meta-value .form-control {
+  height: 36px;
+  font-size: 0.82rem;
+}
+
+.click-list__badge {
+  flex-shrink: 0;
+}
+
+.click-list__actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.click-list__chev {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-deep);
+  display: grid;
+  place-items: center;
+  font-size: 1.1rem;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.click-list__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.15rem 0.1rem 0;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.click-list__pager {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.click-list__pager button {
+  height: 32px;
+  padding: 0 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border-strong);
+  background: #fff;
+  cursor: pointer;
+  font-weight: 650;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.click-list__pager button:hover:not(:disabled) {
+  border-color: rgba(31, 181, 160, 0.35);
+  color: var(--color-primary-deep);
+}
+
+.click-list__pager button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.click-list--compact .click-list__card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 0.85rem 0.95rem;
+}
+
+.click-list--compact .click-list__meta-grid {
+  grid-column: 1 / -1;
+}
+
+.click-list--compact .click-list__badge,
+.click-list--compact .click-list__actions {
+  justify-self: end;
+}
+
+.click-list--compact .click-list__chev {
+  display: none;
+}
+
+@media (max-width: 1200px) {
+  .click-list__card {
+    grid-template-columns: minmax(0, 200px) minmax(0, 1fr) auto auto auto;
+  }
+}
+
+@media (max-width: 960px) {
+  .click-list__card {
+    grid-template-columns: 1fr auto;
+  }
+
+  .click-list__lead {
+    max-width: none;
+    overflow: hidden;
+  }
+
+  .click-list__meta-grid {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+
+  .click-list__badge {
+    justify-self: start;
+  }
+
+  .click-list__actions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .click-list__chev {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .click-list__card {
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+  }
+
+  .click-list__actions {
+    grid-column: 1;
+    grid-row: auto;
+    justify-content: flex-start;
+  }
+}
+
+/* Legacy aliases used in employee detail tabs */
+.data-table-wrap {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.emp-cell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.08rem;
+  min-width: 0;
+  text-decoration: none !important;
+  color: inherit;
+  line-height: 1.25;
+}
+
+.emp-cell--link {
+  cursor: pointer;
+}
+
+.emp-cell__name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: var(--color-text);
+  letter-spacing: -0.015em;
+  transition: color 0.12s ease;
+}
+
+.emp-cell__id {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #62748f;
+  letter-spacing: 0.01em;
+}
+
+.emp-cell--link:hover .emp-cell__name {
+  color: var(--color-primary-deep);
+}
+
+.emp-cell--empty {
+  color: #8a97ab;
+}
+
+.cell-primary {
+  color: var(--color-text);
+  font-weight: 650;
+}
+
+.cell-secondary {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}

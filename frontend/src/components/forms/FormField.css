@@ -1,0 +1,192 @@
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.form-field__label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  letter-spacing: 0.01em;
+}
+
+.form-field__req {
+  color: var(--color-danger);
+  margin-left: 0.2rem;
+}
+
+.form-control {
+  width: 100%;
+  height: 44px;
+  padding: 0 0.9rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--color-text);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.form-control::placeholder {
+  color: #9aa3b2;
+}
+
+.form-control:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 35%, #cbd5e1);
+}
+
+.form-control:focus {
+  border-color: var(--color-primary);
+  background: #fff;
+  box-shadow: var(--focus-ring);
+  outline: none;
+}
+
+.form-control--textarea {
+  height: auto;
+  padding: 0.8rem 0.95rem;
+  resize: vertical;
+  min-height: 104px;
+  line-height: 1.5;
+  border-radius: 16px;
+}
+
+select.form-control {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2394a3b8' d='M1.4 1.2 6 5.8l4.6-4.6 1.2 1.2L6 8.2 0.2 2.4z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  padding-right: 2.4rem;
+}
+
+input[type='date'].form-control {
+  position: relative;
+}
+
+.form-field__hint {
+  font-size: 0.76rem;
+  color: var(--color-text-muted);
+}
+
+.form-field__error {
+  font-size: 0.76rem;
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.form-field.has-error .form-control {
+  border-color: var(--color-danger);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.form-grid--1 {
+  grid-template-columns: 1fr;
+}
+
+.form-span-2 {
+  grid-column: span 2;
+}
+
+@media (max-width: 720px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-span-2 {
+    grid-column: span 1;
+  }
+}
+
+/* Classic soft form block inside Add/Edit modals */
+.modal__body .form-grid {
+  background: #f2f4f7;
+  border-radius: 20px;
+  padding: 1.2rem 1.15rem 1.25rem;
+  gap: 1.15rem 1.1rem;
+  border: 1px solid rgba(15, 23, 42, 0.04);
+}
+
+.modal__body .form-field__label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.modal__body .form-control {
+  height: 46px;
+  border: none;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.04);
+  padding: 0 1rem;
+}
+
+.modal__body .form-control:hover {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 28%, #e2e8f0);
+}
+
+.modal__body .form-control:focus {
+  box-shadow: var(--focus-ring), inset 0 0 0 1px var(--color-primary);
+  background: #fff;
+}
+
+.modal__body .form-control:disabled {
+  background: #eef1f5;
+  color: var(--color-text-muted);
+}
+
+.modal__body .form-control--textarea {
+  border-radius: 16px;
+  min-height: 110px;
+  padding: 0.85rem 1rem;
+}
+
+.modal__body .form-field .muted {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border-radius: 14px;
+  color: var(--color-text-muted);
+  font-size: 0.86rem;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.04);
+}
+
+.modal__body select.form-control {
+  background-color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2394a3b8' d='M1.4 1.2 6 5.8l4.6-4.6 1.2 1.2L6 8.2 0.2 2.4z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+}
+
+.filters-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  margin-bottom: 1.15rem;
+  padding: 0.95rem 1rem;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+
+.filters-bar .form-field {
+  flex: 1 1 160px;
+  min-width: 140px;
+  max-width: 240px;
+}
+
+.filters-bar .form-field--grow {
+  flex: 2 1 220px;
+  max-width: none;
+}

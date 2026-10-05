@@ -1,0 +1,72 @@
+.stat-card {
+  background: var(--color-surface-solid);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 1.15rem 1.25rem;
+  box-shadow: none;
+  min-width: 0;
+}
+
+.stat-card:hover {
+  border-color: var(--color-border-strong);
+}
+
+.stat-card__label {
+  color: var(--color-text-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  margin-bottom: 0.45rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.stat-card__value {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--color-text);
+  font-family: var(--font-display);
+}
+
+.stat-card__hint {
+  margin-top: 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-success);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stat-card--warning .stat-card__value {
+  color: var(--color-warning);
+}
+
+.stat-card--danger .stat-card__value {
+  color: var(--color-danger);
+}
+
+.stat-card--success .stat-card__value {
+  color: var(--color-success);
+}
+
+.stat-card--primary .stat-card__value {
+  color: var(--color-accent);
+}
+
+.stat-card--navy {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-card);
+}
+
+.stat-card--navy .stat-card__label {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.stat-card--navy .stat-card__value {
+  color: #ffffff;
+}
+
+.stat-card--navy .stat-card__hint {
+  color: rgba(255, 255, 255, 0.78);
+}

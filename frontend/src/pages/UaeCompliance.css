@@ -1,0 +1,257 @@
+.uae-compliance-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.uae-header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.uae-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.uae-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  padding: 8px 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.uae-category-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.uae-tab {
+  background: none;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-muted, #64748b);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.uae-tab.is-active {
+  background: #f0fdf4;
+  color: #15803d;
+  font-weight: 600;
+  border: 1px solid #bbf7d0;
+}
+
+.uae-table-wrap {
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.uae-cases-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+}
+
+.uae-cases-table th {
+  background: #f8fafc;
+  padding: 12px 16px;
+  font-weight: 600;
+  color: #475569;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+}
+
+.uae-cases-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.uae-emp-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.uae-emp-col .name {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.uae-emp-col .sub {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.cat-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 12px;
+}
+
+.cat-labor {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.cat-skilled {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.cat-manager {
+  background: #f5f3ff;
+  color: #6d28d9;
+}
+
+.stage-badge {
+  font-weight: 500;
+  color: #1e293b;
+}
+
+/* Modal */
+.uae-case-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.category-alert-banner {
+  background: #f8fafc;
+  border-left: 3px solid #0284c7;
+  padding: 10px 14px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.category-alert-banner p {
+  margin: 4px 0 0 0;
+  color: #334155;
+}
+
+.uae-stepper-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.uae-stepper-container h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.stepper-horizontal {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 6px 0;
+}
+
+.step-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: #f1f5f9;
+  font-size: 11px;
+  white-space: nowrap;
+  color: #64748b;
+}
+
+.step-pill.is-active {
+  background: #2563eb;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.step-pill.is-done {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.step-pill.is-skipped {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+.closure-checklist-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 12px 16px;
+}
+
+.closure-checklist-card h4 {
+  margin: 0 0 4px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.checklist-sub {
+  margin: 0 0 10px 0;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.checklist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px;
+}
+
+.check-item-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.is-checked-text {
+  color: #15803d;
+  font-weight: 500;
+  text-decoration: line-through;
+}
+
+.action-comments-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.action-comments-field label {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.action-comments-field textarea {
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.uae-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 12px;
+}
