@@ -7,11 +7,19 @@ const isLocalhost =
   window.location.hostname === 'localhost' ||
   window.location.hostname === '127.0.0.1'
 
-const BASE_URL = (
-  isLocalhost
-    ? 'http://localhost:3000'
-    : import.meta.env.VITE_API_BASE_URL
-).replace(/\/$/, '')
+// Localhost communicates directly with http://localhost:3000.
+// Production/Vercel routes through the Vercel application origin proxy (/api)
+// to forward to ngrok server-side, preventing browser CORS preflight blocks.
+const resolveBaseUrl = () => {
+  if (isLocalhost) return 'http://localhost:3000'
+  const envUrl = (import.meta.env.VITE_API_BASE_URL || '').trim()
+  if (!envUrl || envUrl.includes('ngrok')) {
+    return '/api'
+  }
+  return envUrl
+}
+
+const BASE_URL = resolveBaseUrl().replace(/\/$/, '')
 
 const TOKEN_KEY = 'eics_access_token'
 
@@ -67,12 +75,21 @@ function friendlyMessage(status, body, fallback) {
  */
 export async function apiRequest(path, options = {}) {
   const method = (options.method || 'GET').toUpperCase()
-  const url = `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`
+  const cleanPath = path.startsWith('/') ? path : `/${path}`
+  const url =
+    BASE_URL === '/api' && cleanPath.startsWith('/api/')
+      ? cleanPath
+      : `${BASE_URL}${cleanPath}`
   const useAuth = options.auth !== false
+
+  const shouldSkipNgrokWarning =
+    !isLocalhost ||
+    (typeof BASE_URL === 'string' && BASE_URL.includes('ngrok'))
 
   const headers = {
     Accept: 'application/json',
     ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+    ...(shouldSkipNgrokWarning ? { 'ngrok-skip-browser-warning': 'true' } : {}),
     ...options.headers,
   }
 

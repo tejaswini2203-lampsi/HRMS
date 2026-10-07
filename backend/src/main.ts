@@ -11,7 +11,7 @@ async function bootstrap() {
       'https://hrms-sage-six-53.vercel.app'
     ],
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'ngrok-skip-browser-warning'],
     credentials: true,
   });
   await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
