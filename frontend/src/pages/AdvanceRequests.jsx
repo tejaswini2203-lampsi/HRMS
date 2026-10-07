@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { requestsApi } from '../services/api/hrms'
+import { requestsApi, masterApi } from '../services/api/hrms'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import PageHeader from '../components/common/PageHeader'
@@ -19,24 +19,31 @@ export default function AdvanceRequestsPage() {
   const [loading, setLoading] = useState(true)
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [eligibilityRules, setEligibilityRules] = useState([])
 
   // Form state
   const [requestType, setRequestType] = useState('SALARY_ADVANCE')
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
   const [repaymentMonths, setRepaymentMonths] = useState(3)
+  const [preferredStartDate, setPreferredStartDate] = useState('')
 
   // Approval modal
   const [selectedReq, setSelectedReq] = useState(null)
   const [approvalAction, setApprovalAction] = useState('APPROVE')
   const [approvalRemarks, setApprovalRemarks] = useState('')
+  const [approvalStartDate, setApprovalStartDate] = useState('')
   const [processing, setProcessing] = useState(false)
 
   const loadRequests = useCallback(async () => {
     try {
       setLoading(true)
-      const data = await requestsApi.getRequests()
-      setRequests(data || [])
+      const [reqData, rulesData] = await Promise.all([
+        requestsApi.getRequests(),
+        masterApi.getAdvanceEligibility().catch(() => []),
+      ])
+      setRequests(reqData || [])
+      setEligibilityRules(rulesData || [])
     } catch (err) {
       addToast(err.message || 'Failed to load requests', 'error')
     } finally {
@@ -66,11 +73,13 @@ export default function AdvanceRequestsPage() {
         amount: Number(amount),
         reason: reason.trim(),
         repaymentScheduleMonths: Number(repaymentMonths),
+        startDate: preferredStartDate || undefined,
       })
       addToast('Advance request submitted for approval', 'success')
       setCreateModalOpen(false)
       setAmount('')
       setReason('')
+      setPreferredStartDate('')
       loadRequests()
     } catch (err) {
       addToast(err.message || 'Submission failed', 'error')
@@ -86,6 +95,7 @@ export default function AdvanceRequestsPage() {
       await requestsApi.processApproval(selectedReq.RequestID, {
         action: approvalAction,
         remarks: approvalRemarks,
+        startDate: approvalStartDate || undefined,
       })
       addToast(
         approvalAction === 'APPROVE' ? 'Approval step recorded' : 'Request rejected',
@@ -100,13 +110,17 @@ export default function AdvanceRequestsPage() {
     }
   }
 
-  const canApprove = user?.role === 'HOD' || user?.role === 'HR' || user?.role === 'ADMIN'
+  const canApprove =
+    user?.role === 'HOD' ||
+    user?.role === 'HR' ||
+    user?.role === 'ADMIN' ||
+    user?.role === 'FINANCE'
 
   return (
     <div className="advance-requests-page">
       <PageHeader
         title="💰 Advance Requests"
-        subtitle="Submit and track Salary & Gratuity Advances with structured multi-tier approval chains"
+        subtitle="Submit and track Salary & Gratuity Advances with structured multi-tier approval chains (Manager → HR → Finance)"
       >
         <div className="adv-header-actions">
           <Button variant="primary" onClick={() => setCreateModalOpen(true)}>
@@ -115,12 +129,13 @@ export default function AdvanceRequestsPage() {
         </div>
       </PageHeader>
 
-      {/* Info notice about Phase 1 repayment storage */}
+      {/* Info notice about Phase 1 repayment storage & eligibility */}
       <div className="adv-policy-banner">
         <span className="banner-icon">ℹ️</span>
         <div>
-          <strong>Phase 1 Advance Rule:</strong> Repayment schedules are stored for future Payroll execution.
-          Approval chain: Manager/HOD → HR → Finance. (Minimum tenure and max eligibility percentages: <em>Pending Confirmation</em>).
+          <strong>Regional Eligibility Status:</strong> Eligibility parameters pending regional HR confirmation.
+          Requests are accepted and routed through standard 3-tier review: <strong>HOD / Manager → HR → Finance</strong>.
+          Repayment schedules are stored for future Payroll execution.
         </div>
       </div>
 
@@ -148,7 +163,7 @@ export default function AdvanceRequestsPage() {
         ) : requests.length === 0 ? (
           <EmptyState
             title="No advance requests submitted"
-            description="Employees can submit salary or gratuity advances for multi-tier manager and HR review."
+            description="Employees can submit salary or gratuity advances for multi-tier manager, HR, and Finance review."
             action={
               <Button variant="primary" onClick={() => setCreateModalOpen(true)}>
                 Submit Request
@@ -164,7 +179,8 @@ export default function AdvanceRequestsPage() {
                 <th>Type</th>
                 <th>Amount</th>
                 <th>Repayment Plan</th>
-                <th>Approval Step</th>
+                <th>Start Date</th>
+                <th>Current Stage</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -177,6 +193,12 @@ export default function AdvanceRequestsPage() {
                 } catch {
                   plan = null
                 }
+
+                const isCurrentStageRole =
+                  user?.role === 'ADMIN' ||
+                  (r.Status === 'PENDING_HOD' && user?.role === 'HOD') ||
+                  (r.Status === 'PENDING_HR' && user?.role === 'HR') ||
+                  (r.Status === 'PENDING_FINANCE' && user?.role === 'FINANCE')
 
                 return (
                   <tr key={r.RequestID}>
@@ -203,11 +225,18 @@ export default function AdvanceRequestsPage() {
                     </td>
                     <td>
                       <span className="repayment-pill">
-                        {plan ? `${plan.months} installments of ${plan.installmentAmount}` : 'Standard schedule'}
+                        {plan ? `${plan.months} mos @ ${Number(plan.installmentAmount).toLocaleString()}` : 'Standard schedule'}
                       </span>
                     </td>
                     <td>
-                      <span className="approver-badge">{r.CurrentApproverRole}</span>
+                      <span className="date-tag">
+                        {plan?.startDate ? plan.startDate : 'Pending Confirmation'}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="approver-badge">
+                        {r.Status === 'APPROVED' ? 'Approved' : r.CurrentApproverRole || r.Status.replace('PENDING_', '')}
+                      </span>
                     </td>
                     <td>
                       <Badge
@@ -223,7 +252,7 @@ export default function AdvanceRequestsPage() {
                       </Badge>
                     </td>
                     <td>
-                      {canApprove && r.Status.startsWith('PENDING') && (
+                      {canApprove && r.Status.startsWith('PENDING') && isCurrentStageRole && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -231,6 +260,7 @@ export default function AdvanceRequestsPage() {
                             setSelectedReq(r)
                             setApprovalAction('APPROVE')
                             setApprovalRemarks('')
+                            setApprovalStartDate(plan?.startDate || '')
                           }}
                         >
                           Review & Decide
@@ -294,6 +324,18 @@ export default function AdvanceRequestsPage() {
             </div>
 
             <div className="form-group">
+              <label>Preferred Repayment Start Date (Optional):</label>
+              <input
+                type="date"
+                value={preferredStartDate}
+                onChange={(e) => setPreferredStartDate(e.target.value)}
+              />
+              <small className="form-help">
+                Specify when deductions should begin. Approvers may confirm or adjust this date.
+              </small>
+            </div>
+
+            <div className="form-group">
               <label>Reason / Justification:</label>
               <textarea
                 rows={3}
@@ -321,7 +363,7 @@ export default function AdvanceRequestsPage() {
         <Modal
           isOpen={Boolean(selectedReq)}
           onClose={() => setSelectedReq(null)}
-          title={`Review Request ${selectedReq.RequestCode}`}
+          title={`Review Request ${selectedReq.RequestCode} (${selectedReq.CurrentApproverRole} Review)`}
         >
           <div className="adv-approval-modal">
             <div className="req-summary-box">
@@ -359,7 +401,7 @@ export default function AdvanceRequestsPage() {
                     checked={approvalAction === 'APPROVE'}
                     onChange={() => setApprovalAction('APPROVE')}
                   />
-                  Approve Step (Forward to next level)
+                  Approve Step (Forward / Finalize)
                 </label>
                 <label className="radio-label">
                   <input
@@ -373,6 +415,20 @@ export default function AdvanceRequestsPage() {
                 </label>
               </div>
             </div>
+
+            {approvalAction === 'APPROVE' && (
+              <div className="form-group">
+                <label>Repayment Deduction Start Date:</label>
+                <input
+                  type="date"
+                  value={approvalStartDate}
+                  onChange={(e) => setApprovalStartDate(e.target.value)}
+                />
+                <small className="form-help">
+                  Confirmed start date will be stored on the repayment schedule for future Payroll consumption.
+                </small>
+              </div>
+            )}
 
             <div className="form-group">
               <label>Decision Notes / Remarks:</label>
@@ -402,3 +458,4 @@ export default function AdvanceRequestsPage() {
     </div>
   )
 }
+

@@ -1,4 +1,4 @@
-export const APP_ROLES = ['EMPLOYEE', 'HOD', 'HR', 'ADMIN'] as const;
+export const APP_ROLES = ['EMPLOYEE', 'HOD', 'HR', 'ADMIN', 'FINANCE'] as const;
 export type AppRole = (typeof APP_ROLES)[number];
 
 export interface AuthUser {

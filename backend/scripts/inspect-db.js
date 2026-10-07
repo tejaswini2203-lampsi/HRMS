@@ -22,13 +22,11 @@ async function main() {
   `);
   console.table(cases.recordset);
 
-  console.log('--- LETTER REQUESTS ---');
-  const letters = await pool.request().query(`
-    SELECT LetterRequestID, RequestCode, LetterType, EmpID, RegionCode, Status, GeneratedDocumentID, Remarks
-    FROM dbo.LetterRequest
-    ORDER BY LetterRequestID;
+  console.log('--- LETTER TEMPLATES ---');
+  const tpls = await pool.request().query(`
+    SELECT TemplateID, LetterType, RegionCode, RequiresHODApproval, IsActive FROM dbo.LetterTemplateMaster;
   `);
-  console.table(letters.recordset);
+  console.table(tpls.recordset);
 
   console.log('--- DOCUMENT MASTER ---');
   const docs = await pool.request().query(`
@@ -45,6 +43,12 @@ async function main() {
     ORDER BY AuditID DESC;
   `);
   console.table(audit.recordset);
+
+  console.log('--- CHECK CONSTRAINTS ---');
+  const ck = await pool.request().query(`
+    SELECT CONSTRAINT_NAME, CHECK_CLAUSE FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS;
+  `);
+  console.table(ck.recordset);
 
   await pool.close();
 }

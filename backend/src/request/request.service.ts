@@ -36,6 +36,7 @@ export interface EmployeeRequestRecord {
   LastName?: string;
   Designation?: string;
   Salary?: number;
+  ReportsToEmpID?: number | null;
 }
 
 @Injectable()
@@ -61,7 +62,8 @@ export class RequestService {
         e.FirstName,
         e.LastName,
         e.Designation,
-        e.Salary
+        e.Salary,
+        e.ReportsToEmpID
       FROM dbo.EmployeeRequest r
       INNER JOIN dbo.Employee e ON r.EmpID = e.EmpID
       WHERE 1=1
@@ -92,8 +94,12 @@ export class RequestService {
     } else if (user.role === 'HOD') {
       query += ` AND (e.ReportsToEmpID = @userEmpId OR r.EmpID = @userEmpId)`;
       params.userEmpId = user.empId;
+    } else if (user.role === 'HR' && user.subsidiaryId) {
+      query += ` AND (r.RegionCode = @userSub OR r.RegionCode = @userSubAlt)`;
+      params.userSub = user.subsidiaryId;
+      params.userSubAlt =
+        user.subsidiaryId === 'saudi' ? 'KSA' : user.subsidiaryId === 'uae' ? 'UAE' : user.subsidiaryId;
     }
-    // HR & ADMIN have full cross-region access
 
     query += ` ORDER BY r.RequestID DESC;`;
 
@@ -108,7 +114,8 @@ export class RequestService {
           e.FirstName,
           e.LastName,
           e.Designation,
-          e.Salary
+          e.Salary,
+          e.ReportsToEmpID
         FROM dbo.EmployeeRequest r
         INNER JOIN dbo.Employee e ON r.EmpID = e.EmpID
         WHERE r.RequestID = @id;
@@ -118,8 +125,12 @@ export class RequestService {
     if (!req) throw new NotFoundException('Request not found');
 
     if (user.role === 'EMPLOYEE' && req.EmpID !== user.empId) {
-      throw new ForbiddenException('Access denied');
+      throw new ForbiddenException('Access denied: You can only view your own requests');
     }
+    if (user.role === 'HOD' && req.ReportsToEmpID !== user.empId && req.EmpID !== user.empId) {
+      throw new ForbiddenException('Access denied: Request is outside your authorized reporting hierarchy');
+    }
+
     return req;
   }
 
@@ -130,6 +141,7 @@ export class RequestService {
       reason: string;
       repaymentScheduleMonths?: number;
       installmentAmount?: number;
+      preferredStartDate?: string;
     },
     user: AuthUser,
   ): Promise<EmployeeRequestRecord> {
@@ -141,21 +153,77 @@ export class RequestService {
     }
 
     const emp = await this.databaseService.queryOne<any>(
-      `SELECT EmpID, FirstName, LastName, SubsidiaryID, ReportsToEmpID FROM dbo.Employee WHERE EmpID = @empId;`,
+      `SELECT EmpID, FirstName, LastName, SubsidiaryID, ReportsToEmpID, Salary, JoiningDate FROM dbo.Employee WHERE EmpID = @empId;`,
       { empId: user.empId },
     );
     if (!emp) throw new NotFoundException('Employee record not found');
 
     const regionCode = emp.SubsidiaryID || 'uae';
+
+    // 1. Evaluate Configurable Eligibility Rules
+    const rule = await this.databaseService.queryOne<any>(
+      `
+        SELECT TOP 1 * FROM dbo.AdvanceEligibilityRule
+        WHERE RequestTypeCode = @type AND (RegionCode = @reg OR RegionCode = 'ALL') AND IsActive = 1
+        ORDER BY RuleID DESC;
+      `,
+      { type: data.requestType, reg: regionCode },
+    );
+
+    let eligibilityNote = 'Eligibility parameters verified against policy rules';
+    if (!rule || rule.PendingConfirmation) {
+      // Pending confirmation: do NOT hardcode fake thresholds, allow submission with advisory notice
+      eligibilityNote = `Eligibility parameters pending regional HR confirmation for ${regionCode} — proceeding with review chain`;
+    } else {
+      // Confirmed rule evaluation
+      if (rule.MaxSalaryPercentage && emp.Salary) {
+        const maxEligible = (Number(emp.Salary) * Number(rule.MaxSalaryPercentage)) / 100;
+        if (data.amount > maxEligible) {
+          throw new BadRequestException(
+            `Requested amount exceeds maximum policy threshold of ${rule.MaxSalaryPercentage}% of salary (${maxEligible})`,
+          );
+        }
+      }
+      if (rule.MinTenureMonths && emp.JoiningDate) {
+        const monthsTenure = Math.floor(
+          (Date.now() - new Date(emp.JoiningDate).getTime()) / (1000 * 60 * 60 * 24 * 30.4375),
+        );
+        if (monthsTenure < rule.MinTenureMonths) {
+          throw new BadRequestException(
+            `Minimum service tenure of ${rule.MinTenureMonths} months required (current: ${monthsTenure} months)`,
+          );
+        }
+      }
+    }
+
+    // 2. Determine initial step from ApprovalChainMaster
+    const chainSteps = await this.databaseService.query<any>(
+      `
+        SELECT * FROM dbo.ApprovalChainMaster
+        WHERE RequestTypeCode = @type AND (RegionCode = @reg OR RegionCode = 'ALL')
+        ORDER BY SequenceOrder ASC;
+      `,
+      { type: data.requestType, reg: regionCode },
+    );
+
+    const initialRole = chainSteps.length > 0 ? chainSteps[0].ApproverRole : 'HOD';
+    const initialStatus = `PENDING_${initialRole}`;
+
     const countRes = await this.databaseService.queryOne<{ count: number }>(
       `SELECT COUNT(*) AS count FROM dbo.EmployeeRequest;`,
     );
     const requestCode = `REQ-${(countRes?.count ?? 0) + 101}`;
 
+    const months = data.repaymentScheduleMonths || 3;
+    const instAmount =
+      data.installmentAmount || Math.round((data.amount / months) * 100) / 100;
+
     const repaymentSchedule = JSON.stringify({
-      months: data.repaymentScheduleMonths || 3,
-      installmentAmount: data.installmentAmount || Math.round((data.amount / (data.repaymentScheduleMonths || 3)) * 100) / 100,
+      months,
+      installmentAmount: instAmount,
+      startDate: (data as any).startDate || data.preferredStartDate || null,
       note: 'Stored repayment schedule for future Payroll (Phase 1)',
+      eligibilityStatus: eligibilityNote,
     });
 
     const created = await this.databaseService.queryOne<EmployeeRequestRecord>(
@@ -180,8 +248,8 @@ export class RequestService {
           @amount,
           @reason,
           @repaymentSchedule,
-          'PENDING_HOD',
-          'HOD'
+          @status,
+          @currentApproverRole
         );
       `,
       {
@@ -192,13 +260,18 @@ export class RequestService {
         amount: data.amount,
         reason: data.reason.trim(),
         repaymentSchedule,
+        status: initialStatus,
+        currentApproverRole: initialRole,
       },
     );
 
     if (!created) throw new BadRequestException('Failed to create request');
 
-    // Create Work Queue Task for HOD
-    const dueDate = this.slaService.calculateDueDate(new Date(), 2, 'BUSINESS').toISOString().slice(0, 10);
+    // 3. Create initial Work Queue Task for first approver role
+    const slaDays = chainSteps.length > 0 ? chainSteps[0].SLADays || 2 : 2;
+    const dueDate = this.slaService.calculateDueDate(new Date(), slaDays, 'BUSINESS').toISOString().slice(0, 10);
+    const assignedEmpId = initialRole === 'HOD' ? emp.ReportsToEmpID || null : null;
+
     await this.databaseService.query(
       `
         INSERT INTO dbo.WorkQueueTask (
@@ -219,10 +292,10 @@ export class RequestService {
         ) VALUES (
           'Request',
           @sourceId,
-          'HOD_APPROVAL',
+          @actionKey,
           @targetEmpId,
           @regionCode,
-          'HOD',
+          @assignedRole,
           @assignedEmpId,
           @title,
           @instruction,
@@ -235,15 +308,18 @@ export class RequestService {
       `,
       {
         sourceId: String(created.RequestID),
+        actionKey: `${initialRole}_APPROVAL`,
         targetEmpId: user.empId,
         regionCode,
-        assignedEmpId: emp.ReportsToEmpID || null,
-        title: `${user.name} — ${data.requestType === 'SALARY_ADVANCE' ? 'Salary Advance' : 'Gratuity Advance'} (AED/SAR ${data.amount})`,
-        instruction: `Review and confirm ${data.requestType.replace('_', ' ')} request of ${data.amount} for ${user.name}.`,
+        assignedRole: initialRole,
+        assignedEmpId,
+        title: `${user.name} — ${data.requestType === 'SALARY_ADVANCE' ? 'Salary Advance' : 'Gratuity Advance'} (${regionCode === 'saudi' ? 'SAR' : 'AED'} ${data.amount})`,
+        instruction: `Review and confirm ${data.requestType.replace('_', ' ')} request of ${data.amount} for ${user.name}. ${eligibilityNote}.`,
         dueDate,
       },
     );
 
+    // 4. Audit Log
     await this.auditService.log({
       actorEmpId: user.empId,
       actorName: user.name,
@@ -251,7 +327,12 @@ export class RequestService {
       action: 'SUBMIT_ADVANCE_REQUEST',
       module: 'Requests',
       recordId: String(created.RequestID),
-      afterValue: JSON.stringify({ amount: data.amount, type: data.requestType }),
+      afterValue: JSON.stringify({
+        amount: data.amount,
+        type: data.requestType,
+        eligibilityStatus: eligibilityNote,
+        repaymentSchedule: { months, installmentAmount: instAmount },
+      }),
       empId: user.empId,
       regionCode,
       source: 'Request Engine',
@@ -265,14 +346,51 @@ export class RequestService {
     data: {
       action: 'APPROVE' | 'REJECT';
       remarks?: string;
+      startDate?: string;
     },
     user: AuthUser,
   ): Promise<any> {
     const req = await this.databaseService.queryOne<any>(
-      `SELECT r.*, e.FirstName, e.LastName FROM dbo.EmployeeRequest r INNER JOIN dbo.Employee e ON r.EmpID = e.EmpID WHERE r.RequestID = @requestId;`,
+      `
+        SELECT r.*, e.FirstName, e.LastName, e.ReportsToEmpID
+        FROM dbo.EmployeeRequest r
+        INNER JOIN dbo.Employee e ON r.EmpID = e.EmpID
+        WHERE r.RequestID = @requestId;
+      `,
       { requestId },
     );
     if (!req) throw new NotFoundException('Request not found');
+
+    // Regional isolation check for HR and HOD
+    if ((user.role === 'HR' || user.role === 'HOD') && user.subsidiaryId) {
+      const userSub = user.subsidiaryId.toLowerCase();
+      const reqSub = (req.RegionCode || '').toLowerCase();
+      const normalizedUserSub = userSub === 'saudi' ? 'ksa' : userSub;
+      const normalizedReqSub = reqSub === 'saudi' ? 'ksa' : reqSub;
+      if (normalizedUserSub !== normalizedReqSub) {
+        throw new ForbiddenException(
+          'Access denied: You cannot process requests outside your assigned regional entity',
+        );
+      }
+    }
+
+    // Role-based security check for current approver
+    if (req.CurrentApproverRole === 'HOD') {
+      if (user.role !== 'HOD' && user.role !== 'ADMIN') {
+        throw new ForbiddenException('Only the reporting HOD or Admin can approve this initial department step');
+      }
+      if (user.role === 'HOD' && req.ReportsToEmpID !== user.empId && req.EmpID !== user.empId) {
+        throw new ForbiddenException('Access denied: Request is outside your authorized reporting hierarchy');
+      }
+    } else if (req.CurrentApproverRole === 'HR') {
+      if (user.role !== 'HR' && user.role !== 'ADMIN') {
+        throw new ForbiddenException('Only HR or Admin can process HR approval');
+      }
+    } else if (req.CurrentApproverRole === 'FINANCE') {
+      if (user.role !== 'ADMIN' && user.role !== 'FINANCE') {
+        throw new ForbiddenException('Only Finance or Admin can process Finance approval');
+      }
+    }
 
     const remarks = data.remarks || null;
 
@@ -300,7 +418,7 @@ export class RequestService {
         actorEmpId: user.empId,
         actorName: user.name,
         actorRole: user.role,
-        action: 'REJECT_ADVANCE_REQUEST',
+        action: `REJECT_ADVANCE_${req.CurrentApproverRole}`,
         module: 'Requests',
         recordId: String(requestId),
         afterValue: 'REJECTED: ' + (remarks || ''),
@@ -312,42 +430,96 @@ export class RequestService {
       return { success: true, status: 'REJECTED' };
     }
 
-    // Determine next step in approval chain: PENDING_HOD -> PENDING_HR -> PENDING_FINANCE -> APPROVED
+    // Dynamic next step lookup from dbo.ApprovalChainMaster
+    const chainSteps = await this.databaseService.query<any>(
+      `
+        SELECT * FROM dbo.ApprovalChainMaster
+        WHERE RequestTypeCode = @type AND (RegionCode = @reg OR RegionCode = 'ALL')
+        ORDER BY SequenceOrder ASC;
+      `,
+      { type: req.RequestType, reg: req.RegionCode },
+    );
+
+    const currentIdx = chainSteps.findIndex((c: any) => c.ApproverRole === req.CurrentApproverRole);
+    const nextStep = currentIdx >= 0 && currentIdx + 1 < chainSteps.length ? chainSteps[currentIdx + 1] : null;
+
     let nextStatus = 'APPROVED';
     let nextRole = 'COMPLETED';
 
-    if (req.Status === 'PENDING_HOD') {
-      nextStatus = 'PENDING_HR';
-      nextRole = 'HR';
+    if (nextStep) {
+      nextStatus = `PENDING_${nextStep.ApproverRole}`;
+      nextRole = nextStep.ApproverRole;
+    }
+
+    // Parse and update repayment schedule with start date
+    let schedObj: any = {};
+    try {
+      schedObj = JSON.parse(req.RepaymentSchedule || '{}');
+    } catch {}
+
+    const resolvedStartDate =
+      data.startDate ||
+      schedObj.startDate ||
+      new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    const updatedRepaymentSchedule = JSON.stringify({
+      months: schedObj.months || 3,
+      installmentAmount:
+        schedObj.installmentAmount || Math.round((Number(req.Amount) / (schedObj.months || 3)) * 100) / 100,
+      startDate: resolvedStartDate,
+      approvedAmount: Number(req.Amount),
+      status: nextStatus === 'APPROVED' ? 'APPROVED_STORED_FOR_PAYROLL' : 'IN_REVIEW',
+      note: 'Stored approved advance and repayment schedule for future Payroll (Phase 1) — Payroll deductions out of scope',
+    });
+
+    // Update approval timestamps per role
+    if (req.CurrentApproverRole === 'HOD') {
       await this.databaseService.query(
         `
           UPDATE dbo.EmployeeRequest
-          SET Status = @nextStatus, CurrentApproverRole = @nextRole, HODApprovedBy = @userId, HODApprovedAt = SYSDATETIME(), HODRemarks = @remarks, UpdatedAt = SYSDATETIME()
+          SET
+            Status = @nextStatus,
+            CurrentApproverRole = @nextRole,
+            HODApprovedBy = @userId,
+            HODApprovedAt = SYSDATETIME(),
+            HODRemarks = @remarks,
+            RepaymentSchedule = @repaymentSchedule,
+            UpdatedAt = SYSDATETIME()
           WHERE RequestID = @requestId;
         `,
-        { requestId, nextStatus, nextRole, userId: user.empId, remarks },
+        { requestId, nextStatus, nextRole, userId: user.empId, remarks, repaymentSchedule: updatedRepaymentSchedule },
       );
-    } else if (req.Status === 'PENDING_HR') {
-      nextStatus = 'PENDING_FINANCE';
-      nextRole = 'HR'; // Or Finance
+    } else if (req.CurrentApproverRole === 'HR') {
       await this.databaseService.query(
         `
           UPDATE dbo.EmployeeRequest
-          SET Status = @nextStatus, CurrentApproverRole = @nextRole, HRApprovedBy = @userId, HRApprovedAt = SYSDATETIME(), HRRemarks = @remarks, UpdatedAt = SYSDATETIME()
+          SET
+            Status = @nextStatus,
+            CurrentApproverRole = @nextRole,
+            HRApprovedBy = @userId,
+            HRApprovedAt = SYSDATETIME(),
+            HRRemarks = @remarks,
+            RepaymentSchedule = @repaymentSchedule,
+            UpdatedAt = SYSDATETIME()
           WHERE RequestID = @requestId;
         `,
-        { requestId, nextStatus, nextRole, userId: user.empId, remarks },
+        { requestId, nextStatus, nextRole, userId: user.empId, remarks, repaymentSchedule: updatedRepaymentSchedule },
       );
-    } else if (req.Status === 'PENDING_FINANCE') {
-      nextStatus = 'APPROVED';
-      nextRole = 'COMPLETED';
+    } else if (req.CurrentApproverRole === 'FINANCE') {
       await this.databaseService.query(
         `
           UPDATE dbo.EmployeeRequest
-          SET Status = @nextStatus, CurrentApproverRole = @nextRole, FinanceApprovedBy = @userId, FinanceApprovedAt = SYSDATETIME(), FinanceRemarks = @remarks, UpdatedAt = SYSDATETIME()
+          SET
+            Status = @nextStatus,
+            CurrentApproverRole = @nextRole,
+            FinanceApprovedBy = @userId,
+            FinanceApprovedAt = SYSDATETIME(),
+            FinanceRemarks = @remarks,
+            RepaymentSchedule = @repaymentSchedule,
+            UpdatedAt = SYSDATETIME()
           WHERE RequestID = @requestId;
         `,
-        { requestId, nextStatus, nextRole, userId: user.empId, remarks },
+        { requestId, nextStatus, nextRole, userId: user.empId, remarks, repaymentSchedule: updatedRepaymentSchedule },
       );
     }
 
@@ -363,7 +535,8 @@ export class RequestService {
 
     // If next status is not APPROVED, generate next Work Queue Task
     if (nextStatus !== 'APPROVED') {
-      const dueDate = this.slaService.calculateDueDate(new Date(), 2, 'BUSINESS').toISOString().slice(0, 10);
+      const slaDays = nextStep ? nextStep.SLADays || 2 : 2;
+      const dueDate = this.slaService.calculateDueDate(new Date(), slaDays, 'BUSINESS').toISOString().slice(0, 10);
       await this.databaseService.query(
         `
           INSERT INTO dbo.WorkQueueTask (
@@ -403,7 +576,7 @@ export class RequestService {
           regionCode: req.RegionCode,
           assignedRole: nextRole,
           title: `${req.FirstName} ${req.LastName} — ${req.RequestType.replace('_', ' ')} (${nextStatus})`,
-          instruction: `Action required: ${nextRole} approval for advance amount of ${req.Amount}.`,
+          instruction: `Action required: ${nextRole} review and approval for advance of ${req.Amount}.`,
           dueDate,
         },
       );
@@ -413,7 +586,7 @@ export class RequestService {
       actorEmpId: user.empId,
       actorName: user.name,
       actorRole: user.role,
-      action: `APPROVE_ADVANCE_STEP_${req.Status}`,
+      action: `APPROVE_ADVANCE_STEP_${req.CurrentApproverRole}`,
       module: 'Requests',
       recordId: String(requestId),
       beforeValue: req.Status,
@@ -423,6 +596,11 @@ export class RequestService {
       source: 'Work Queue',
     });
 
-    return { success: true, status: nextStatus };
+    return {
+      success: true,
+      status: nextStatus,
+      currentApproverRole: nextRole,
+      repaymentSchedule: JSON.parse(updatedRepaymentSchedule),
+    };
   }
 }

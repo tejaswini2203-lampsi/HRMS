@@ -31,6 +31,8 @@ export default function ReportsPage() {
         data = await reportsApi.getWorkQueueSummary(reg)
       } else if (activeReport === 'ksa-iqama-costs') {
         data = await reportsApi.getKsaIqamaCosts()
+      } else if (activeReport === 'ksa-airfare') {
+        data = await reportsApi.getKsaAirfareReport()
       } else if (activeReport === 'advance-requests') {
         data = await reportsApi.getAdvanceRequests(reg)
       } else if (activeReport === 'letter-requests') {
@@ -136,6 +138,13 @@ export default function ReportsPage() {
             onClick={() => setActiveReport('ksa-iqama-costs')}
           >
             KSA Iqama Costs
+          </button>
+          <button
+            type="button"
+            className={`rep-tab ${activeReport === 'ksa-airfare' ? 'is-active' : ''}`}
+            onClick={() => setActiveReport('ksa-airfare')}
+          >
+            KSA Airfare Tracker
           </button>
           <button
             type="button"

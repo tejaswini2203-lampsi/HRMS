@@ -333,10 +333,10 @@ async function runVerification() {
   console.log('\n--- Test 13: Existing modules regression check ---');
   const modChecks = [
     { name: 'Employees', path: '/employees' },
-    { name: 'Leaves', path: '/leave' },
-    { name: 'Passports', path: '/passports' },
-    { name: 'Vehicles', path: '/vehicles' },
-    { name: 'Flight Tickets', path: '/flight-tickets' },
+    { name: 'Leaves', path: '/leaves' },
+    { name: 'Passports', path: '/passports/alerts' },
+    { name: 'Vehicles', path: `/vehicle-allocations/${teamMemberId}` },
+    { name: 'Flight Tickets', path: `/flight-tickets/${teamMemberId}` },
     { name: 'Compliance Cases', path: '/compliance/cases' },
     { name: 'Documents', path: '/documents' },
     { name: 'Work Queue', path: '/work-queue/tasks' },

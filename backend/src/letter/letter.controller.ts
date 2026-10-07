@@ -42,12 +42,22 @@ export class LetterController {
 
   @Post()
   async createLetterRequest(
-    @Body() body: { letterType: string; remarks?: string },
+    @Body() body: { letterType: string; purpose: string; addressee?: string; remarks?: string },
     @CurrentUser() user: AuthUser,
   ) {
     return this.letterService.createLetterRequest(body, user);
   }
 
+  @Patch(':id/approval')
+  async processApproval(
+    @Param('id') id: string,
+    @Body() body: { action: 'APPROVE' | 'REJECT'; remarks?: string },
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.letterService.processHodApproval(Number(id), body, user);
+  }
+
+  @Post(':id/issue')
   @Patch(':id/issue')
   async generateAndIssueLetter(
     @Param('id') id: string,

@@ -111,7 +111,21 @@ export class MasterService {
   // 8. Letter Templates
   async getLetterTemplates(regionCode?: string) {
     let query = `
-      SELECT TemplateID, TemplateCode, TemplateName, LetterType, RegionCode, Version, Content, MergeFields, RequiresSignatory, IsActive, CreatedAt, UpdatedAt
+      SELECT
+        TemplateID,
+        TemplateCode,
+        TemplateName,
+        LetterType,
+        RegionCode,
+        Version,
+        Content,
+        MergeFields,
+        RequiresSignatory,
+        ISNULL(RequiresHODApproval, 0) AS RequiresHODApproval,
+        ISNULL(Language, 'EN') AS Language,
+        IsActive,
+        CreatedAt,
+        UpdatedAt
       FROM dbo.LetterTemplateMaster
       WHERE IsActive = 1
     `;
@@ -124,36 +138,120 @@ export class MasterService {
     return this.databaseService.query(query, params);
   }
 
-  async updateLetterTemplate(id: number, content: string, user: AuthUser) {
+  // 9. Advance Eligibility Rules
+  async getAdvanceEligibility(requestTypeCode?: string, regionCode?: string) {
+    let query = `SELECT * FROM dbo.AdvanceEligibilityRule WHERE IsActive = 1`;
+    const params: Record<string, unknown> = {};
+    if (requestTypeCode) {
+      query += ` AND RequestTypeCode = @requestTypeCode`;
+      params.requestTypeCode = requestTypeCode;
+    }
+    if (regionCode && regionCode !== 'all') {
+      query += ` AND (RegionCode = @regionCode OR RegionCode = 'ALL')`;
+      params.regionCode = regionCode;
+    }
+    query += ` ORDER BY RuleID ASC;`;
+    return this.databaseService.query(query, params);
+  }
+
+  async updateLetterTemplate(
+    id: number,
+    dto: { content?: string; requiresHodApproval?: boolean; language?: string } | string,
+    user: AuthUser,
+  ) {
     const existing = await this.databaseService.queryOne<any>(
       `SELECT * FROM dbo.LetterTemplateMaster WHERE TemplateID = @id;`,
       { id },
     );
     if (!existing) throw new NotFoundException('Letter template not found');
 
+    const contentVal =
+      typeof dto === 'string'
+        ? dto
+        : dto.content !== undefined
+        ? dto.content
+        : (dto as any).templateBody;
+    const newContent = contentVal !== undefined ? contentVal : existing.Content;
+    const hodVal =
+      typeof dto === 'object'
+        ? dto.requiresHodApproval !== undefined
+          ? dto.requiresHodApproval
+          : (dto as any).requiresHODApproval
+        : undefined;
+    const newRequiresHod =
+      hodVal !== undefined ? (hodVal ? 1 : 0) : existing.RequiresHODApproval;
+    const newLanguage = (typeof dto === 'object' && dto.language) || existing.Language || 'EN';
+    const newVersion = (existing.Version || 1) + 1;
+
+    // Deactivate previous version to protect historical issued letters
     await this.databaseService.query(
+      `UPDATE dbo.LetterTemplateMaster SET IsActive = 0, UpdatedAt = SYSDATETIME() WHERE TemplateID = @id;`,
+      { id },
+    );
+
+    // Insert new version
+    const created = await this.databaseService.queryOne<any>(
       `
-        UPDATE dbo.LetterTemplateMaster
-        SET Content = @content, Version = Version + 1, UpdatedAt = SYSDATETIME()
-        WHERE TemplateID = @id;
+        INSERT INTO dbo.LetterTemplateMaster (
+          TemplateCode,
+          TemplateName,
+          LetterType,
+          RegionCode,
+          Version,
+          Content,
+          MergeFields,
+          RequiresSignatory,
+          RequiresHODApproval,
+          Language,
+          IsActive
+        )
+        OUTPUT INSERTED.*
+        VALUES (
+          @code,
+          @name,
+          @type,
+          @region,
+          @version,
+          @content,
+          @fields,
+          @signatory,
+          @hodApproval,
+          @language,
+          1
+        );
       `,
-      { id, content },
+      {
+        code: `${(existing.TemplateCode || 'TPL').replace(/_v\d+$/, '')}_v${newVersion}`,
+        name: existing.TemplateName,
+        type: existing.LetterType,
+        region: existing.RegionCode,
+        version: newVersion,
+        content: newContent,
+        fields: existing.MergeFields,
+        signatory: existing.RequiresSignatory,
+        hodApproval: newRequiresHod,
+        language: newLanguage,
+      },
     );
 
     await this.auditService.log({
       actorEmpId: user.empId,
       actorName: user.name,
       actorRole: user.role,
-      action: 'UPDATE_LETTER_TEMPLATE',
+      action: 'VERSION_LETTER_TEMPLATE',
       module: 'Administration',
-      recordId: String(id),
-      beforeValue: JSON.stringify({ Content: existing.Content, Version: existing.Version }),
-      afterValue: JSON.stringify({ Content: content, Version: existing.Version + 1 }),
+      recordId: String(created.TemplateID),
+      beforeValue: JSON.stringify({ TemplateID: id, Version: existing.Version }),
+      afterValue: JSON.stringify({
+        TemplateID: created.TemplateID,
+        Version: newVersion,
+        RequiresHODApproval: newRequiresHod,
+      }),
       regionCode: existing.RegionCode,
-      source: 'Admin UI',
+      source: 'Master Service',
     });
 
-    return { success: true };
+    return created;
   }
 
   // 9. System Configurations / Feature Flags
@@ -193,5 +291,15 @@ export class MasterService {
     });
 
     return { success: true, key, value };
+  }
+
+  // 10. Document Types Catalog
+  async getDocumentTypes() {
+    return this.databaseService.query(`
+      SELECT TypeCode, TypeName, Category, DefaultSourceModule, RequiresSignature, IsActive
+      FROM dbo.DocumentTypeMaster
+      WHERE IsActive = 1
+      ORDER BY TypeName ASC;
+    `);
   }
 }

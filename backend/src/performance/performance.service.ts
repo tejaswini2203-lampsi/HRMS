@@ -18,6 +18,7 @@ export interface PerformanceCommentRecord {
   Priority: 'NORMAL' | 'HIGH';
   CreatedByEmpID: number;
   CreatedByName: string;
+  CreatedBy?: string;
   CreatedAt: Date;
 }
 
@@ -263,6 +264,7 @@ export class PerformanceService {
       Priority: r.Weight as 'NORMAL' | 'HIGH',
       CreatedByEmpID: Number(r.CreatedByEmpID),
       CreatedByName: r.CreatedByName,
+      CreatedBy: r.CreatedByName,
       CreatedAt: r.CreatedAt,
     }));
   }
@@ -398,6 +400,7 @@ export class PerformanceService {
       Priority: created.Priority as 'NORMAL' | 'HIGH',
       CreatedByEmpID: Number(created.CreatedByEmpID),
       CreatedByName: created.CreatedByName,
+      CreatedBy: created.CreatedByName,
       CreatedAt: created.CreatedAt,
     };
   }

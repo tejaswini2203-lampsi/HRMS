@@ -82,6 +82,13 @@ export class SignatureService {
 
     if (!created) throw new BadRequestException('Failed to capture signature event');
 
+    if (data.documentId) {
+      await this.databaseService.query(
+        `UPDATE dbo.DocumentMaster SET SignatureStatus = 'SIGNED' WHERE DocumentID = @documentId;`,
+        { documentId: data.documentId },
+      );
+    }
+
     await this.auditService.log({
       actorEmpId: data.user.empId,
       actorName: data.user.name,
@@ -105,6 +112,17 @@ export class SignatureService {
         ORDER BY SignatureID DESC;
       `,
       { sourceModule, sourceId: String(sourceId) },
+    );
+  }
+
+  async getSignaturesByDocumentId(documentId: number): Promise<SignatureEventRecord[]> {
+    return this.databaseService.query<SignatureEventRecord>(
+      `
+        SELECT * FROM dbo.SignatureEvent
+        WHERE DocumentID = @documentId
+        ORDER BY SignatureID DESC;
+      `,
+      { documentId },
     );
   }
 }

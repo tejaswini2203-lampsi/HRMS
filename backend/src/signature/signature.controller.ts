@@ -35,9 +35,13 @@ export class SignatureController {
 
   @Get()
   async getSignatures(
-    @Query('sourceModule') sourceModule: string,
-    @Query('sourceId') sourceId: string,
+    @Query('sourceModule') sourceModule?: string,
+    @Query('sourceId') sourceId?: string,
+    @Query('documentId') documentId?: string,
   ) {
-    return this.signatureService.getSignatures(sourceModule, sourceId);
+    if (documentId) {
+      return this.signatureService.getSignaturesByDocumentId(Number(documentId));
+    }
+    return this.signatureService.getSignatures(sourceModule || '', sourceId || '');
   }
 }

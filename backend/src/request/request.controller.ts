@@ -48,7 +48,7 @@ export class RequestController {
   @Patch(':id/approval')
   async processApproval(
     @Param('id') id: string,
-    @Body() body: { action: 'APPROVE' | 'REJECT'; remarks?: string },
+    @Body() body: { action: 'APPROVE' | 'REJECT'; remarks?: string; startDate?: string },
     @CurrentUser() user: AuthUser,
   ) {
     return this.requestService.processApproval(Number(id), body, user);

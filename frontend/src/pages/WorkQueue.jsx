@@ -31,7 +31,7 @@ export default function WorkQueuePage() {
   const [iqamaDuration, setIqamaDuration] = useState('12') // '3' | '6' | '12'
   const [rejectMode, setRejectMode] = useState(false)
   const [activeModalTab, setActiveModalTab] = useState('details') // 'details' | 'documents' | 'history'
-  const [iqamaFees, setIqamaFees] = useState({ 3: 650, 6: 1200, 12: 2000 })
+  const [iqamaFees, setIqamaFees] = useState({ 3: 2588, 6: 5175, 12: 10350 })
 
   useEffect(() => {
     masterApi.getConfigs()
@@ -39,9 +39,9 @@ export default function WorkQueuePage() {
         if (Array.isArray(configs)) {
           const cfgMap = Object.fromEntries(configs.map((c) => [c.ConfigKey, c.ConfigValue]))
           setIqamaFees({
-            3: cfgMap.defaultIqamaCost3Months ? Number(cfgMap.defaultIqamaCost3Months) : 650,
-            6: cfgMap.defaultIqamaCost6Months ? Number(cfgMap.defaultIqamaCost6Months) : 1200,
-            12: cfgMap.defaultIqamaCost12Months ? Number(cfgMap.defaultIqamaCost12Months) : 2000,
+            3: cfgMap.ksaIqama3mFee ? Number(cfgMap.ksaIqama3mFee) : (cfgMap.defaultIqamaCost3Months ? Number(cfgMap.defaultIqamaCost3Months) : 2588),
+            6: cfgMap.ksaIqama6mFee ? Number(cfgMap.ksaIqama6mFee) : (cfgMap.defaultIqamaCost6Months ? Number(cfgMap.defaultIqamaCost6Months) : 5175),
+            12: cfgMap.ksaIqama12mFee ? Number(cfgMap.ksaIqama12mFee) : (cfgMap.defaultIqamaCost12Months ? Number(cfgMap.defaultIqamaCost12Months) : 10350),
           })
         }
       })

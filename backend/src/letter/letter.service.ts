@@ -8,6 +8,7 @@ import { DatabaseService } from '../database/database.service';
 import { AuditService } from '../audit/audit.service';
 import { SlaService } from '../sla/sla.service';
 import { DocumentService } from '../document/document.service';
+import { SignatureService } from '../signature/signature.service';
 import { AuthUser } from '../auth/auth.types';
 import { generateLetterPdf } from './letter-pdf.generator';
 
@@ -19,6 +20,8 @@ export interface LetterRequestRecord {
   EmpID: number;
   RegionCode: string;
   Status: string;
+  Purpose: string | null;
+  Addressee: string | null;
   GeneratedDocumentID: number | null;
   RequestedByEmpID: number;
   ReviewerEmpID: number | null;
@@ -31,6 +34,7 @@ export interface LetterRequestRecord {
   LastName?: string;
   Designation?: string;
   TemplateName?: string;
+  RequiresHODApproval?: boolean;
 }
 
 @Injectable()
@@ -40,6 +44,7 @@ export class LetterService {
     private readonly auditService: AuditService,
     private readonly slaService: SlaService,
     private readonly documentService: DocumentService,
+    private readonly signatureService: SignatureService,
   ) {}
 
   async findAll(
@@ -57,7 +62,8 @@ export class LetterService {
         e.FirstName,
         e.LastName,
         e.Designation,
-        t.TemplateName
+        t.TemplateName,
+        ISNULL(t.RequiresHODApproval, 0) AS RequiresHODApproval
       FROM dbo.LetterRequest lr
       INNER JOIN dbo.Employee e ON lr.EmpID = e.EmpID
       LEFT JOIN dbo.LetterTemplateMaster t ON lr.TemplateID = t.TemplateID
@@ -88,6 +94,11 @@ export class LetterService {
     } else if (user.role === 'HOD') {
       query += ` AND (e.ReportsToEmpID = @userEmpId OR lr.EmpID = @userEmpId)`;
       params.userEmpId = user.empId;
+    } else if (user.role === 'HR' && user.subsidiaryId) {
+      query += ` AND (lr.RegionCode = @userSub OR lr.RegionCode = @userSubAlt)`;
+      params.userSub = user.subsidiaryId;
+      params.userSubAlt =
+        user.subsidiaryId === 'saudi' ? 'KSA' : user.subsidiaryId === 'uae' ? 'UAE' : user.subsidiaryId;
     }
 
     query += ` ORDER BY lr.LetterRequestID DESC;`;
@@ -106,10 +117,18 @@ export class LetterService {
           e.JoiningDate,
           e.Salary,
           e.SubsidiaryID,
+          e.ReportsToEmpID,
+          e.IqamaNumber,
+          e.EmiratesID,
+          e.VisaNumber,
+          e.ContractExpiry,
+          d.DepartmentName,
           t.TemplateName,
-          t.Content AS TemplateContent
+          t.Content AS TemplateContent,
+          ISNULL(t.RequiresHODApproval, 0) AS RequiresHODApproval
         FROM dbo.LetterRequest lr
         INNER JOIN dbo.Employee e ON lr.EmpID = e.EmpID
+        LEFT JOIN dbo.Department d ON e.DepartmentID = d.DepartmentID
         LEFT JOIN dbo.LetterTemplateMaster t ON lr.TemplateID = t.TemplateID
         WHERE lr.LetterRequestID = @id;
       `,
@@ -118,7 +137,10 @@ export class LetterService {
     if (!lr) throw new NotFoundException('Letter request not found');
 
     if (user.role === 'EMPLOYEE' && lr.EmpID !== user.empId) {
-      throw new ForbiddenException('Access denied');
+      throw new ForbiddenException('Access denied: You can only view your own letter requests');
+    }
+    if (user.role === 'HOD' && lr.ReportsToEmpID !== user.empId && lr.EmpID !== user.empId) {
+      throw new ForbiddenException('Access denied: Employee is outside your reporting scope');
     }
 
     return lr;
@@ -127,10 +149,16 @@ export class LetterService {
   async createLetterRequest(
     data: {
       letterType: string;
+      purpose: string;
+      addressee?: string;
       remarks?: string;
     },
     user: AuthUser,
   ): Promise<LetterRequestRecord> {
+    if (!data.purpose || !data.purpose.trim()) {
+      throw new BadRequestException('Purpose is required for official letter requests');
+    }
+
     const template = await this.databaseService.queryOne<any>(
       `SELECT * FROM dbo.LetterTemplateMaster WHERE LetterType = @type AND IsActive = 1;`,
       { type: data.letterType },
@@ -140,7 +168,7 @@ export class LetterService {
     }
 
     const emp = await this.databaseService.queryOne<any>(
-      `SELECT EmpID, FirstName, LastName, SubsidiaryID FROM dbo.Employee WHERE EmpID = @empId;`,
+      `SELECT EmpID, FirstName, LastName, SubsidiaryID, ReportsToEmpID FROM dbo.Employee WHERE EmpID = @empId;`,
       { empId: user.empId },
     );
     if (!emp) throw new NotFoundException('Employee not found');
@@ -151,6 +179,9 @@ export class LetterService {
     );
     const requestCode = `LTR-${(countRes?.count ?? 0) + 101}`;
 
+    const requiresHod = Boolean(template.RequiresHODApproval);
+    const initialStatus = requiresHod ? 'PENDING_HOD' : 'PENDING_HR';
+
     const created = await this.databaseService.queryOne<LetterRequestRecord>(
       `
         INSERT INTO dbo.LetterRequest (
@@ -159,6 +190,8 @@ export class LetterService {
           TemplateID,
           EmpID,
           RegionCode,
+          Purpose,
+          Addressee,
           Status,
           RequestedByEmpID,
           Remarks
@@ -170,7 +203,9 @@ export class LetterService {
           @templateId,
           @empId,
           @regionCode,
-          'PENDING_REVIEW',
+          @purpose,
+          @addressee,
+          @status,
           @requestedBy,
           @remarks
         );
@@ -181,6 +216,9 @@ export class LetterService {
         templateId: template.TemplateID,
         empId: user.empId,
         regionCode,
+        purpose: data.purpose.trim(),
+        addressee: data.addressee?.trim() || null,
+        status: initialStatus,
         requestedBy: user.empId,
         remarks: data.remarks || null,
       },
@@ -188,7 +226,163 @@ export class LetterService {
 
     if (!created) throw new BadRequestException('Failed to create letter request');
 
-    // Create Work Queue Task for HR
+    // Create Work Queue Task according to HOD approval requirement
+    const dueDate = this.slaService.calculateDueDate(new Date(), 2, 'BUSINESS').toISOString().slice(0, 10);
+    const assignedRole = requiresHod ? 'HOD' : 'HR';
+    const assignedEmpId = requiresHod ? emp.ReportsToEmpID || null : null;
+    const actionKey = requiresHod ? 'HOD_APPROVAL' : 'HR_REVIEW';
+    const title = `${user.name} — ${data.letterType}${requiresHod ? ' (HOD Endorsement)' : ''}`;
+    const instruction = requiresHod
+      ? `Review and endorse ${data.letterType} request for ${user.name}. Purpose: ${data.purpose.trim()}.`
+      : `Review, digitally sign, and issue ${data.letterType} for ${user.name}. Purpose: ${data.purpose.trim()}.`;
+
+    await this.databaseService.query(
+      `
+        INSERT INTO dbo.WorkQueueTask (
+          SourceModule,
+          SourceID,
+          ActionKey,
+          TargetEmpID,
+          RegionCode,
+          AssignedRole,
+          AssignedEmpID,
+          Title,
+          Instruction,
+          PrimaryActionLabel,
+          Priority,
+          DueDate,
+          SLAStatus,
+          Status
+        ) VALUES (
+          'Letter',
+          @sourceId,
+          @actionKey,
+          @targetEmpId,
+          @regionCode,
+          @assignedRole,
+          @assignedEmpId,
+          @title,
+          @instruction,
+          @actionLabel,
+          'MEDIUM',
+          @dueDate,
+          'ON_TIME',
+          'OPEN'
+        );
+      `,
+      {
+        sourceId: String(created.LetterRequestID),
+        actionKey,
+        targetEmpId: user.empId,
+        regionCode,
+        assignedRole,
+        assignedEmpId,
+        title,
+        instruction,
+        actionLabel: requiresHod ? 'Endorse Letter' : 'Review Letter',
+        dueDate,
+      },
+    );
+
+    await this.auditService.log({
+      actorEmpId: user.empId,
+      actorName: user.name,
+      actorRole: user.role,
+      action: 'REQUEST_LETTER',
+      module: 'Letters',
+      recordId: String(created.LetterRequestID),
+      afterValue: JSON.stringify({
+        letterType: data.letterType,
+        purpose: data.purpose.trim(),
+        addressee: data.addressee?.trim() || null,
+        requiresHODApproval: requiresHod,
+        initialStatus,
+      }),
+      empId: user.empId,
+      regionCode,
+      source: 'Letter Service',
+    });
+
+    return created;
+  }
+
+  // HOD Endorsement step for letter types configured with RequiresHODApproval = true
+  async processHodApproval(
+    requestId: number,
+    data: {
+      action: 'APPROVE' | 'REJECT';
+      remarks?: string;
+    },
+    user: AuthUser,
+  ): Promise<any> {
+    const lr = await this.findById(requestId, user);
+
+    if (user.role === 'EMPLOYEE') {
+      throw new ForbiddenException('Employees cannot endorse letter requests');
+    }
+    if (user.role === 'HOD' && lr.ReportsToEmpID !== user.empId && lr.EmpID !== user.empId) {
+      throw new ForbiddenException('Access denied: You can only endorse requests for your team members');
+    }
+    if (lr.Status !== 'PENDING_HOD') {
+      throw new BadRequestException(`Letter request is in status "${lr.Status}", not awaiting HOD endorsement`);
+    }
+
+    if (data.action === 'REJECT') {
+      await this.databaseService.query(
+        `
+          UPDATE dbo.LetterRequest
+          SET Status = 'REJECTED', Remarks = @remarks, UpdatedAt = SYSDATETIME()
+          WHERE LetterRequestID = @id;
+        `,
+        { id: requestId, remarks: data.remarks || 'Rejected by HOD' },
+      );
+
+      await this.databaseService.query(
+        `
+          UPDATE dbo.WorkQueueTask
+          SET Status = 'COMPLETED', CompletedByEmpID = @empId, CompletedAt = SYSDATETIME()
+          WHERE SourceModule = 'Letter' AND SourceID = @sourceId AND Status IN ('OPEN', 'IN_PROGRESS');
+        `,
+        { sourceId: String(requestId), empId: user.empId },
+      );
+
+      await this.auditService.log({
+        actorEmpId: user.empId,
+        actorName: user.name,
+        actorRole: user.role,
+        action: 'REJECT_LETTER_HOD',
+        module: 'Letters',
+        recordId: String(requestId),
+        afterValue: 'REJECTED: ' + (data.remarks || ''),
+        empId: lr.EmpID,
+        regionCode: lr.RegionCode,
+        source: 'Work Queue',
+      });
+
+      return { success: true, status: 'REJECTED' };
+    }
+
+    // HOD Endorsed -> moves to PENDING_HR
+    await this.databaseService.query(
+      `
+        UPDATE dbo.LetterRequest
+        SET Status = 'PENDING_HR', UpdatedAt = SYSDATETIME()
+        WHERE LetterRequestID = @id;
+      `,
+      { id: requestId },
+    );
+
+    // Complete HOD task
+    await this.databaseService.query(
+      `
+        UPDATE dbo.WorkQueueTask
+        SET Status = 'COMPLETED', CompletedByEmpID = @empId, CompletedAt = SYSDATETIME()
+        WHERE SourceModule = 'Letter' AND SourceID = @sourceId AND Status IN ('OPEN', 'IN_PROGRESS');
+      `,
+      { sourceId: String(requestId), empId: user.empId },
+    );
+
+    // Dispatch HR Review & Issuance Task
     const dueDate = this.slaService.calculateDueDate(new Date(), 2, 'BUSINESS').toISOString().slice(0, 10);
     await this.databaseService.query(
       `
@@ -215,7 +409,7 @@ export class LetterService {
           'HR',
           @title,
           @instruction,
-          'Review Letter',
+          'Issue Letter',
           'MEDIUM',
           @dueDate,
           'ON_TIME',
@@ -223,11 +417,11 @@ export class LetterService {
         );
       `,
       {
-        sourceId: String(created.LetterRequestID),
-        targetEmpId: user.empId,
-        regionCode,
-        title: `${user.name} — ${data.letterType}`,
-        instruction: `Review and generate ${data.letterType} for ${user.name}.`,
+        sourceId: String(requestId),
+        targetEmpId: lr.EmpID,
+        regionCode: lr.RegionCode,
+        title: `${lr.FirstName} ${lr.LastName} — ${lr.LetterType} (Ready for HR Issuance)`,
+        instruction: `Endorsed by HOD. Review and digitally sign/issue ${lr.LetterType} for ${lr.FirstName} ${lr.LastName}.`,
         dueDate,
       },
     );
@@ -236,18 +430,20 @@ export class LetterService {
       actorEmpId: user.empId,
       actorName: user.name,
       actorRole: user.role,
-      action: 'REQUEST_LETTER',
+      action: 'ENDORSE_LETTER_HOD',
       module: 'Letters',
-      recordId: String(created.LetterRequestID),
-      afterValue: data.letterType,
-      empId: user.empId,
-      regionCode,
-      source: 'Letter Service',
+      recordId: String(requestId),
+      beforeValue: 'PENDING_HOD',
+      afterValue: 'PENDING_HR',
+      empId: lr.EmpID,
+      regionCode: lr.RegionCode,
+      source: 'Work Queue',
     });
 
-    return created;
+    return { success: true, status: 'PENDING_HR' };
   }
 
+  // HR Review, Sign, and Issue Letter
   async generateAndIssueLetter(
     requestId: number,
     data: {
@@ -258,7 +454,15 @@ export class LetterService {
     },
     user: AuthUser,
   ): Promise<any> {
+    if (user.role === 'EMPLOYEE') {
+      throw new ForbiddenException('Employees cannot issue official letters');
+    }
+
     const lr = await this.findById(requestId, user);
+
+    if (lr.Status === 'PENDING_HOD') {
+      throw new BadRequestException('HOD endorsement is required before HR issuance for this letter type');
+    }
 
     if (data.action === 'REJECT') {
       await this.databaseService.query(
@@ -267,7 +471,7 @@ export class LetterService {
           SET Status = 'REJECTED', Remarks = @remarks, UpdatedAt = SYSDATETIME()
           WHERE LetterRequestID = @id;
         `,
-        { id: requestId, remarks: data.remarks || null },
+        { id: requestId, remarks: data.remarks || 'Rejected by HR' },
       );
 
       await this.databaseService.query(
@@ -278,6 +482,19 @@ export class LetterService {
         `,
         { sourceId: String(requestId), empId: user.empId },
       );
+
+      await this.auditService.log({
+        actorEmpId: user.empId,
+        actorName: user.name,
+        actorRole: user.role,
+        action: 'REJECT_LETTER_HR',
+        module: 'Letters',
+        recordId: String(requestId),
+        afterValue: 'REJECTED: ' + (data.remarks || ''),
+        empId: lr.EmpID,
+        regionCode: lr.RegionCode,
+        source: 'Letter Service',
+      });
 
       return { success: true, status: 'REJECTED' };
     }
@@ -292,12 +509,13 @@ export class LetterService {
       };
     }
 
-    // Merge template fields
+    // Merge template fields with Employee Master data
     let renderedContent = data.customContent || lr.TemplateContent || '';
     const mergeMap: Record<string, string> = {
       '{{EmployeeName}}': `${lr.FirstName} ${lr.LastName}`.trim(),
       '{{EmployeeID}}': String(lr.EmpID),
       '{{Designation}}': lr.Designation || 'Officer',
+      '{{Department}}': lr.DepartmentName || 'General Operations',
       '{{JoiningDate}}': lr.JoiningDate ? String(lr.JoiningDate) : 'N/A',
       '{{Salary}}': lr.Salary
         ? `${lr.RegionCode === 'saudi' ? 'SAR' : 'AED'} ${Number(lr.Salary).toLocaleString()}`
@@ -310,10 +528,26 @@ export class LetterService {
         lr.RegionCode === 'saudi'
           ? 'Kingdom of Saudi Arabia'
           : 'United Arab Emirates',
+      '{{Purpose}}': lr.Purpose || 'Official Record & Verification',
+      '{{Addressee}}': lr.Addressee || 'To Whom It May Concern',
+      '{{IqamaNumber}}': lr.IqamaNumber || 'N/A',
+      '{{EmiratesID}}': lr.EmiratesID || 'N/A',
+      '{{VisaNumber}}': lr.VisaNumber || 'N/A',
+      '{{ContractExpiry}}': lr.ContractExpiry ? String(lr.ContractExpiry) : 'N/A',
     };
 
     for (const [placeholder, val] of Object.entries(mergeMap)) {
       renderedContent = renderedContent.replaceAll(placeholder, val);
+    }
+
+    // Capture E-Signature in SignatureService
+    if (data.signatureData) {
+      await this.signatureService.sign({
+        sourceModule: 'Letters',
+        sourceId: String(requestId),
+        signatureData: data.signatureData,
+        user,
+      });
     }
 
     // Generate valid readable corporate PDF
@@ -338,6 +572,8 @@ export class LetterService {
         : 'Confidential',
       entity: entityName,
       region: regionName,
+      purpose: lr.Purpose || undefined,
+      addressee: lr.Addressee || undefined,
       content: renderedContent,
       issuedBy: user.name || 'Human Resources Department',
       issueDate: new Date(),
@@ -359,6 +595,20 @@ export class LetterService {
       mimeType: 'application/pdf',
       user,
     });
+
+    // Link signature event to document and mark document SIGNED
+    await this.databaseService.query(
+      `
+        UPDATE dbo.SignatureEvent
+        SET DocumentID = @docId
+        WHERE SourceModule = 'Letters' AND SourceID = @reqId;
+
+        UPDATE dbo.DocumentMaster
+        SET SignatureStatus = 'SIGNED'
+        WHERE DocumentID = @docId;
+      `,
+      { docId: doc.DocumentID, reqId: String(requestId) },
+    );
 
     // Mark letter issued
     await this.databaseService.query(
@@ -401,6 +651,8 @@ export class LetterService {
         documentId: doc.DocumentID,
         fileName,
         letterType: lr.LetterType,
+        purpose: lr.Purpose,
+        addressee: lr.Addressee,
         format: 'PDF',
         fileSize: pdfBuffer.length,
       }),

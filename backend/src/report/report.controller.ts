@@ -50,4 +50,10 @@ export class ReportController {
   async getLetterRequestsSummary(@Query('regionCode') regionCode?: string) {
     return this.reportService.getLetterRequestsSummary(regionCode);
   }
+
+  @Get('ksa-airfare')
+  @Roles('HR', 'ADMIN')
+  async getKsaAirfareReport() {
+    return this.reportService.getKsaAirfareReport();
+  }
 }

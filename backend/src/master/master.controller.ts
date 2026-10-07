@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Patch,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -67,14 +68,23 @@ export class MasterController {
     return this.masterService.getLetterTemplates(regionCode);
   }
 
+  @Get('advance-eligibility')
+  async getAdvanceEligibility(
+    @Query('requestTypeCode') requestTypeCode?: string,
+    @Query('regionCode') regionCode?: string,
+  ) {
+    return this.masterService.getAdvanceEligibility(requestTypeCode, regionCode);
+  }
+
   @Patch('letter-templates/:id')
+  @Put('letter-templates/:id')
   @Roles('HR', 'ADMIN')
   async updateLetterTemplate(
     @Param('id') id: string,
-    @Body('content') content: string,
+    @Body() body: { content?: string; requiresHodApproval?: boolean; language?: string },
     @CurrentUser() user: AuthUser,
   ) {
-    return this.masterService.updateLetterTemplate(Number(id), content, user);
+    return this.masterService.updateLetterTemplate(Number(id), body, user);
   }
 
   @Get('configs')
@@ -90,5 +100,10 @@ export class MasterController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.masterService.updateSystemConfig(key, value, user);
+  }
+
+  @Get('document-types')
+  async getDocumentTypes() {
+    return this.masterService.getDocumentTypes();
   }
 }

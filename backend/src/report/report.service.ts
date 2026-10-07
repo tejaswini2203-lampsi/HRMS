@@ -161,4 +161,28 @@ export class ReportService {
     query += ` GROUP BY lr.LetterType, lr.RegionCode, lr.Status;`;
     return this.databaseService.query(query, params);
   }
+
+  async getKsaAirfareReport() {
+    return this.databaseService.query(`
+      SELECT
+        c.CaseNumber,
+        c.EmpID,
+        e.FirstName,
+        e.LastName,
+        e.Designation,
+        e.SubsidiaryID,
+        CONVERT(varchar(10), e.JoiningDate, 23) AS JoiningDate,
+        DATEDIFF(day, e.JoiningDate, GETDATE()) / 365 AS TenureYears,
+        c.CurrentStageKey,
+        c.Status,
+        c.DueDate,
+        c.MetaJson,
+        c.CreatedAt,
+        c.ClosedAt
+      FROM dbo.ComplianceCase c
+      INNER JOIN dbo.Employee e ON c.EmpID = e.EmpID
+      WHERE c.EventCode IN ('KSA_AIRFARE', 'KSA_BUSINESS_TRAVEL')
+      ORDER BY c.CaseID DESC;
+    `);
+  }
 }

@@ -10,6 +10,8 @@ export interface GenerateLetterPdfOptions {
   salary?: string;
   entity?: string;
   region?: string;
+  purpose?: string;
+  addressee?: string;
   content: string;
   issuedBy?: string;
   issueDate?: Date;
@@ -81,11 +83,14 @@ export function generateLetterPdf(options: GenerateLetterPdfOptions): Promise<Bu
       .text(options.letterType.toUpperCase(), { align: 'center' });
 
     doc.moveDown(0.3);
+    const addresseeText = options.addressee && options.addressee.trim()
+      ? options.addressee.trim().toUpperCase()
+      : 'TO WHOM IT MAY CONCERN';
     doc
       .fontSize(10)
       .font('Helvetica-Bold')
       .fillColor(textColor)
-      .text('TO WHOM IT MAY CONCERN', { align: 'center' });
+      .text(addresseeText, { align: 'center' });
 
     // 3. Employee Summary Metadata Box
     doc.moveDown(1.2);

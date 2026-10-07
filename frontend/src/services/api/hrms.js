@@ -1,4 +1,4 @@
-import { apiRequest } from './client'
+import { apiRequest, getAccessToken } from './client'
 
 const BASE_URL = (
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
@@ -113,6 +113,11 @@ export const lettersApi = {
       method: 'PATCH',
       body,
     }),
+  endorseLetter: (id, body) =>
+    apiRequest(`/letters/${id}/approval`, {
+      method: 'PATCH',
+      body,
+    }),
 }
 
 export const documentsApi = {
@@ -123,17 +128,37 @@ export const documentsApi = {
     if (params.sourceId) q.set('sourceId', params.sourceId)
     if (params.empId) q.set('empId', params.empId)
     if (params.regionCode) q.set('regionCode', params.regionCode)
+    if (params.search) q.set('search', params.search)
+    if (params.signatureStatus) q.set('signatureStatus', params.signatureStatus)
+    if (params.includeAllVersions) q.set('includeAllVersions', params.includeAllVersions)
     const qs = q.toString()
     return apiRequest(`/documents${qs ? `?${qs}` : ''}`)
   },
+  getDocumentTypes: () => apiRequest('/documents/types'),
   getDocumentById: (id) => apiRequest(`/documents/${id}`),
   uploadDocument: (body) =>
     apiRequest('/documents', {
       method: 'POST',
       body,
     }),
+  getVersionHistory: (id) => apiRequest(`/documents/${id}/versions`),
+  uploadNewVersion: (id, body) =>
+    apiRequest(`/documents/${id}/version`, {
+      method: 'POST',
+      body,
+    }),
+  signDocument: (id, body) =>
+    apiRequest(`/documents/${id}/sign`, {
+      method: 'POST',
+      body,
+    }),
+  bulkUpload: (documents) =>
+    apiRequest('/documents/bulk', {
+      method: 'POST',
+      body: { documents },
+    }),
   getDownloadUrl: (id) => {
-    const token = localStorage.getItem('token')
+    const token = getAccessToken()
     return `${BASE_URL}/documents/${id}/download${token ? `?token=${encodeURIComponent(token)}` : ''}`
   },
 }
@@ -190,6 +215,7 @@ export const reportsApi = {
   getWorkQueueSummary: (regionCode) =>
     apiRequest(`/reports/work-queue-summary${regionCode ? `?regionCode=${regionCode}` : ''}`),
   getKsaIqamaCosts: () => apiRequest('/reports/ksa-iqama-costs'),
+  getKsaAirfareReport: () => apiRequest('/reports/ksa-airfare'),
   getAdvanceRequests: (regionCode) =>
     apiRequest(`/reports/advance-requests${regionCode ? `?regionCode=${regionCode}` : ''}`),
   getLetterRequests: (regionCode) =>
@@ -216,6 +242,13 @@ export const masterApi = {
     return apiRequest(`/masters/approval-chains${qs ? `?${qs}` : ''}`)
   },
   getRequestTypes: () => apiRequest('/masters/request-types'),
+  getAdvanceEligibility: (requestTypeCode, regionCode) => {
+    const q = new URLSearchParams()
+    if (requestTypeCode) q.set('requestTypeCode', requestTypeCode)
+    if (regionCode) q.set('regionCode', regionCode)
+    const qs = q.toString()
+    return apiRequest(`/masters/advance-eligibility${qs ? `?${qs}` : ''}`)
+  },
   getLetterTemplates: (regionCode) =>
     apiRequest(`/masters/letter-templates${regionCode ? `?regionCode=${regionCode}` : ''}`),
   updateLetterTemplate: (id, content) =>
