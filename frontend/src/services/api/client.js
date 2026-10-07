@@ -3,9 +3,7 @@
  * Base URL: VITE_API_BASE_URL or http://localhost:3000
  */
 
-const BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
-).replace(/\/$/, '')
+const BASE_URL = 'https://washing-helmet-bristle.ngrok-free.dev';
 
 const TOKEN_KEY = 'eics_access_token'
 
